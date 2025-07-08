@@ -118,7 +118,7 @@ class ExportService {
 
         const worksheet = XLSX.utils.json_to_sheet(formattedData);
         
-        // Set column widths and styling
+        // Set column widths
         const range = XLSX.utils.decode_range(worksheet['!ref']);
         const cols = [];
         
@@ -133,7 +133,7 @@ class ExportService {
               }
             }
           }
-          cols.push({ width: Math.min(maxWidth + 2, 50) });
+          cols.push({ width: Math.min(maxWidth + 3, 50) });
         }
         
         worksheet['!cols'] = cols;
@@ -143,15 +143,26 @@ class ExportService {
           for (let C = range.s.c; C <= range.e.c; ++C) {
             const cell = worksheet[XLSX.utils.encode_cell({r: R, c: C})];
             if (cell) {
+              // Apply Times New Roman font explicitly
               cell.s = {
-                font: { name: 'Times New Roman', sz: 11 },
-                alignment: { vertical: 'center', horizontal: 'left' }
+                font: { 
+                  name: 'Times New Roman', 
+                  sz: 12,
+                  family: 1 // Roman family
+                },
+                alignment: { 
+                  vertical: 'center', 
+                  horizontal: 'left',
+                  wrapText: true
+                }
               };
               
-              // Header styling
+              // Header styling with Times New Roman
               if (R === 0) {
                 cell.s.font.bold = true;
+                cell.s.font.name = 'Times New Roman';
                 cell.s.fill = { fgColor: { rgb: 'E6E6FA' } };
+                cell.s.alignment.horizontal = 'center';
               }
             }
           }
@@ -160,6 +171,14 @@ class ExportService {
         XLSX.utils.book_append_sheet(workbook, worksheet, category.name);
       }
     });
+
+    // Set workbook properties to enforce Times New Roman
+    workbook.Props = {
+      Title: 'Billing Reports',
+      Subject: 'Monthly Billing Data',
+      Author: 'Billing System',
+      CreatedDate: new Date()
+    };
 
     // Generate filename with current date
     const currentDate = new Date().toISOString().split('T')[0];
