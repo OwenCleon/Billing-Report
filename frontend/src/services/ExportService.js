@@ -255,7 +255,7 @@ class ExportService {
       pdf.setFont('times', 'normal');
       
       // Add title (center-aligned)
-      pdf.setFontSize(16);
+      pdf.setFontSize(18);
       pdf.setFont('times', 'bold');
       pdf.text(category.name, pageWidth / 2, 25, { align: 'center' });
       
@@ -263,125 +263,97 @@ class ExportService {
       pdf.setFontSize(10);
       pdf.setFont('times', 'normal');
       const currentDate = new Date().toLocaleDateString('id-ID');
-      pdf.text(`Tanggal: ${currentDate}`, margin, 35);
+      pdf.text(`Tanggal: ${currentDate}`, margin, 40);
+      
+      let yPosition = 55;
       
       if (data.length > 0) {
         const headerMapping = this.getHumanReadableHeaders(category.key);
         
         // Get headers (excluding id)
         const headers = Object.keys(data[0]).filter(key => key !== 'id');
-        const humanHeaders = headers.map(key => headerMapping[key] || key);
         
-        // Calculate optimal column widths
-        const numColumns = headers.length;
-        let baseFontSize = 10;
-        
-        // Adjust font size based on number of columns
-        if (numColumns > 12) {
-          baseFontSize = 7;
-        } else if (numColumns > 10) {
-          baseFontSize = 8;
-        } else if (numColumns > 8) {
-          baseFontSize = 9;
-        }
-        
-        // Calculate column widths evenly distributed
-        const columnWidth = usableWidth / numColumns;
-        const minColumnWidth = 15; // Minimum width per column
-        
-        // Adjust if columns are too narrow
-        const adjustedColumnWidth = Math.max(columnWidth, minColumnWidth);
-        
-        // Start table
-        let yPosition = 50;
-        const lineHeight = baseFontSize * 0.5 + 2; // Responsive line height
-        
-        pdf.setFontSize(baseFontSize);
-        
-        // Headers (center-aligned)
-        pdf.setFont('times', 'bold');
-        let xPosition = margin;
-        
-        humanHeaders.forEach((header, index) => {
-          // Center text within column
-          const textWidth = pdf.getTextWidth(header);
-          const centerX = xPosition + (adjustedColumnWidth / 2) - (textWidth / 2);
-          pdf.text(header, Math.max(xPosition, centerX), yPosition);
-          xPosition += adjustedColumnWidth;
-        });
-        
-        // Draw line under headers
-        pdf.setLineWidth(0.5);
-        pdf.line(margin, yPosition + 3, margin + (adjustedColumnWidth * numColumns), yPosition + 3);
-        yPosition += lineHeight + 5;
-        
-        // Data rows
-        pdf.setFont('times', 'normal');
-        
-        data.forEach((item, rowIndex) => {
-          xPosition = margin;
-          let maxRowHeight = lineHeight;
+        // Process each data item as a vertical block
+        data.forEach((item, itemIndex) => {
+          // Check if we need a new page
+          const estimatedHeight = headers.length * 6 + 15; // Estimate space needed
+          if (yPosition + estimatedHeight > pageHeight - 30) {
+            pdf.addPage();
+            
+            // Re-add title on new page
+            pdf.setFontSize(16);
+            pdf.setFont('times', 'bold');
+            pdf.text(category.name, pageWidth / 2, 25, { align: 'center' });
+            
+            yPosition = 45;
+          }
           
-          headers.forEach((header, colIndex) => {
+          // Add item separator if not first item
+          if (itemIndex > 0) {
+            pdf.setLineWidth(0.3);
+            pdf.setDrawColor(200, 200, 200);
+            pdf.line(margin, yPosition - 5, pageWidth - margin, yPosition - 5);
+            yPosition += 5;
+          }
+          
+          // Process each field as label: value
+          headers.forEach((header) => {
+            const humanLabel = headerMapping[header] || header;
             let value = item[header];
             
             // Format currency fields
             if (header.includes('tagihan') || header.includes('biaya') || header.includes('bayar') || header.includes('setor')) {
               if (typeof value === 'number') {
-                value = this.formatCurrency(value);
+                // Format as Indonesian currency: Rp 250.000,50
+                const formatted = new Intl.NumberFormat('id-ID', {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 2
+                }).format(value);
+                value = `Rp ${formatted}`;
               }
             }
             
-            // Convert value to string and limit length if necessary
-            let cellText = String(value);
-            
-            // Truncate text if too long for column width
-            const maxTextWidth = adjustedColumnWidth - 2; // Leave 2mm padding
-            while (pdf.getTextWidth(cellText) > maxTextWidth && cellText.length > 3) {
-              cellText = cellText.substring(0, cellText.length - 4) + '...';
+            // Format datetime fields
+            if (header === 'waktu' && value) {
+              const date = new Date(value);
+              value = date.toLocaleString('id-ID');
             }
             
-            // Left-align data within column
-            pdf.text(cellText, xPosition + 1, yPosition); // 1mm left padding
+            // Format date fields
+            if ((header === 'tanggal' || header === 'tanggalBuku') && value) {
+              const date = new Date(value);
+              value = date.toLocaleDateString('id-ID');
+            }
             
-            xPosition += adjustedColumnWidth;
-          });
-          
-          yPosition += lineHeight;
-          
-          // Add new page if needed
-          if (yPosition > pageHeight - 30) {
-            pdf.addPage();
-            yPosition = 25;
+            pdf.setFontSize(10);
             
-            // Re-print title and headers on new page
-            pdf.setFontSize(14);
+            // Label (bold)
             pdf.setFont('times', 'bold');
-            pdf.text(category.name, pageWidth / 2, yPosition, { align: 'center' });
-            yPosition += 15;
+            pdf.text(`${humanLabel}:`, margin, yPosition);
             
-            // Re-print headers
-            pdf.setFontSize(baseFontSize);
-            pdf.setFont('times', 'bold');
-            xPosition = margin;
+            // Value (normal) - positioned after the label with proper spacing
+            pdf.setFont('times', 'normal');
+            const labelWidth = pdf.getTextWidth(`${humanLabel}:`);
+            const valueStartX = margin + labelWidth + 3; // 3mm spacing
             
-            humanHeaders.forEach((header, index) => {
-              const textWidth = pdf.getTextWidth(header);
-              const centerX = xPosition + (adjustedColumnWidth / 2) - (textWidth / 2);
-              pdf.text(header, Math.max(xPosition, centerX), yPosition);
-              xPosition += adjustedColumnWidth;
+            // Handle long values with text wrapping
+            const maxValueWidth = usableWidth - labelWidth - 5;
+            const valueLines = pdf.splitTextToSize(String(value), maxValueWidth);
+            
+            valueLines.forEach((line, lineIndex) => {
+              pdf.text(line, valueStartX, yPosition + (lineIndex * 5));
             });
             
-            pdf.line(margin, yPosition + 3, margin + (adjustedColumnWidth * numColumns), yPosition + 3);
-            yPosition += lineHeight + 5;
-            pdf.setFont('times', 'normal');
-          }
+            yPosition += Math.max(5, valueLines.length * 5); // Minimum 5mm line height
+          });
+          
+          yPosition += 10; // Space between items
         });
       } else {
         // No data message (center-aligned)
         pdf.setFontSize(12);
         pdf.setFont('times', 'italic');
-        pdf.text('Tidak ada data tersedia', pageWidth / 2, 70, { align: 'center' });
+        pdf.text('Tidak ada data tersedia', pageWidth / 2, yPosition + 20, { align: 'center' });
       }
     }
     
