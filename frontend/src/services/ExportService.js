@@ -5,11 +5,16 @@ import LocalStorageService from './LocalStorageService';
 
 class ExportService {
   static formatCurrency(value) {
+    if (!value) return '';
+    const numericValue = typeof value === 'string' ? parseFloat(value.replace(/[^0-9.-]+/g, '')) : value;
+    
+    // Format with Indonesian locale for proper thousand separators and comma for decimals
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
       currency: 'IDR',
-      minimumFractionDigits: 0
-    }).format(value).replace('IDR', 'Rp');
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2
+    }).format(numericValue).replace('IDR', 'Rp').replace(/\s/g, ' ');
   }
 
   static getHumanReadableHeaders(categoryKey) {
