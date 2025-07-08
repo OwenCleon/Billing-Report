@@ -228,6 +228,164 @@ class ExportService {
     XLSX.writeFile(workbook, filename);
   }
 
+  static async exportToCombinedPDF() {
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.width;
+    const pageHeight = pdf.internal.pageSize.height;
+    const margin = 15;
+    const usableWidth = pageWidth - (margin * 2);
+    
+    // Multi-column layout settings
+    const numColumns = 3;
+    const columnWidth = (usableWidth - ((numColumns - 1) * 5)) / numColumns; // 5mm spacing between columns
+    const columnSpacing = 5;
+    
+    const categories = [
+      { key: 'pam-jaya', name: 'Tagihan PAM JAYA' },
+      { key: 'listrik-pln', name: 'Tagihan Listrik PLN' },
+      { key: 'pam-lainnya', name: 'Pembayaran PAM (Lainnya)' },
+      { key: 'transaksi-umum', name: 'Transaksi Umum' },
+      { key: 'penerimaan-negara', name: 'Penerimaan Negara' }
+    ];
+
+    // Set font to Times New Roman
+    pdf.setFont('times', 'normal');
+    
+    // Add main title
+    pdf.setFontSize(16);
+    pdf.setFont('times', 'bold');
+    pdf.text('LAPORAN BILLING LENGKAP', pageWidth / 2, 20, { align: 'center' });
+    
+    // Add current date
+    pdf.setFontSize(9);
+    pdf.setFont('times', 'normal');
+    const currentDate = new Date().toLocaleDateString('id-ID');
+    pdf.text(`Tanggal Cetak: ${currentDate}`, margin, 30);
+    
+    // Initialize layout variables
+    let currentColumn = 0;
+    let yPosition = 40;
+    const maxYPosition = pageHeight - 20; // Bottom margin
+    const columnStartY = 40;
+    
+    // Collect all data from all categories
+    const allEntries = [];
+    categories.forEach(category => {
+      const data = LocalStorageService.getData(category.key);
+      data.forEach(item => {
+        allEntries.push({
+          category: category.name,
+          data: item,
+          headerMapping: this.getHumanReadableHeaders(category.key)
+        });
+      });
+    });
+    
+    // Process each entry
+    allEntries.forEach((entry, entryIndex) => {
+      const headers = Object.keys(entry.data).filter(key => key !== 'id');
+      
+      // Calculate space needed for this entry
+      const estimatedHeight = (headers.length * 4.5) + 12; // 4.5mm per field + spacing
+      
+      // Check if entry fits in current column
+      if (yPosition + estimatedHeight > maxYPosition) {
+        // Move to next column
+        currentColumn++;
+        yPosition = columnStartY;
+        
+        // Check if we need a new page
+        if (currentColumn >= numColumns) {
+          pdf.addPage();
+          currentColumn = 0;
+          yPosition = columnStartY;
+        }
+      }
+      
+      // Calculate X position for current column
+      const xPosition = margin + (currentColumn * (columnWidth + columnSpacing));
+      
+      // Add category label (small, italic)
+      pdf.setFontSize(7);
+      pdf.setFont('times', 'italic');
+      pdf.text(`[${entry.category}]`, xPosition, yPosition);
+      yPosition += 6;
+      
+      // Add entry fields
+      pdf.setFontSize(8);
+      headers.forEach((header) => {
+        const humanLabel = entry.headerMapping[header] || header;
+        let value = entry.data[header];
+        
+        // Format currency fields
+        if (header.includes('tagihan') || header.includes('biaya') || header.includes('bayar') || header.includes('setor')) {
+          if (typeof value === 'number') {
+            const formatted = new Intl.NumberFormat('id-ID', {
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 2
+            }).format(value);
+            value = `Rp ${formatted}`;
+          }
+        }
+        
+        // Format datetime fields
+        if (header === 'waktu' && value) {
+          const date = new Date(value);
+          value = date.toLocaleString('id-ID');
+        }
+        
+        // Format date fields
+        if ((header === 'tanggal' || header === 'tanggalBuku') && value) {
+          const date = new Date(value);
+          value = date.toLocaleDateString('id-ID');
+        }
+        
+        // Label (bold)
+        pdf.setFont('times', 'bold');
+        const labelText = `${humanLabel}:`;
+        pdf.text(labelText, xPosition, yPosition);
+        
+        // Value (normal) - handle text wrapping within column
+        pdf.setFont('times', 'normal');
+        const labelWidth = pdf.getTextWidth(labelText);
+        const valueStartX = xPosition + labelWidth + 2; // 2mm spacing
+        const maxValueWidth = columnWidth - labelWidth - 4; // Leave some margin
+        
+        // Split text if too long for column
+        const valueLines = pdf.splitTextToSize(String(value), maxValueWidth);
+        
+        valueLines.forEach((line, lineIndex) => {
+          pdf.text(line, valueStartX, yPosition + (lineIndex * 3.5));
+        });
+        
+        yPosition += Math.max(4.5, valueLines.length * 3.5);
+      });
+      
+      // Add separator line between entries
+      if (entryIndex < allEntries.length - 1) {
+        pdf.setLineWidth(0.2);
+        pdf.setDrawColor(180, 180, 180);
+        pdf.line(xPosition, yPosition + 2, xPosition + columnWidth - 5, yPosition + 2);
+        yPosition += 6;
+      } else {
+        yPosition += 4; // Less space for last entry
+      }
+    });
+    
+    // Add summary footer
+    pdf.setFontSize(8);
+    pdf.setFont('times', 'italic');
+    const totalEntries = allEntries.length;
+    const footerText = `Total ${totalEntries} entri dari ${categories.length} kategori billing`;
+    pdf.text(footerText, pageWidth / 2, pageHeight - 10, { align: 'center' });
+    
+    // Generate filename
+    const currentDateFile = new Date().toISOString().split('T')[0];
+    const filename = `billing-combined-${currentDateFile}.pdf`;
+    
+    pdf.save(filename);
+  }
+
   static async exportToPDF() {
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pageWidth = pdf.internal.pageSize.width;
