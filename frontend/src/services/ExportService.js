@@ -191,7 +191,7 @@ class ExportService {
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pageWidth = pdf.internal.pageSize.width;
     const pageHeight = pdf.internal.pageSize.height;
-    const margin = 15;
+    const margin = 20;
     const usableWidth = pageWidth - (margin * 2);
     
     const categories = [
@@ -210,24 +210,19 @@ class ExportService {
         pdf.addPage();
       }
       
-      // Set font to Times New Roman
+      // Set font to Times New Roman explicitly
       pdf.setFont('times', 'normal');
       
-      // Add title
+      // Add title (center-aligned)
       pdf.setFontSize(16);
       pdf.setFont('times', 'bold');
       pdf.text(category.name, pageWidth / 2, 25, { align: 'center' });
       
-      // Add current date
+      // Add current date (left-aligned)
       pdf.setFontSize(10);
       pdf.setFont('times', 'normal');
       const currentDate = new Date().toLocaleDateString('id-ID');
       pdf.text(`Tanggal: ${currentDate}`, margin, 35);
-      
-      // Add "Made by Owen C with ❤️" credit
-      pdf.setFontSize(8);
-      pdf.setFont('times', 'italic');
-      pdf.text('Made by Owen C with ❤️', pageWidth - margin, 35, { align: 'right' });
       
       if (data.length > 0) {
         const headerMapping = this.getHumanReadableHeaders(category.key);
@@ -236,52 +231,52 @@ class ExportService {
         const headers = Object.keys(data[0]).filter(key => key !== 'id');
         const humanHeaders = headers.map(key => headerMapping[key] || key);
         
-        // Calculate column widths based on content
-        const columnWidths = headers.map(header => {
-          const headerLength = (headerMapping[header] || header).length;
-          const maxContentLength = Math.max(...data.map(item => {
-            let value = item[header];
-            if (header.includes('tagihan') || header.includes('biaya') || header.includes('bayar') || header.includes('setor')) {
-              if (typeof value === 'number') {
-                value = this.formatCurrency(value);
-              }
-            }
-            return value.toString().length;
-          }));
-          return Math.max(headerLength, maxContentLength);
-        });
+        // Calculate optimal column widths
+        const numColumns = headers.length;
+        let baseFontSize = 10;
         
-        // Calculate total width needed
-        const totalWidth = columnWidths.reduce((sum, width) => sum + width, 0);
+        // Adjust font size based on number of columns
+        if (numColumns > 12) {
+          baseFontSize = 7;
+        } else if (numColumns > 10) {
+          baseFontSize = 8;
+        } else if (numColumns > 8) {
+          baseFontSize = 9;
+        }
         
-        // Adjust column widths to fit page
-        const scaleFactor = usableWidth / (totalWidth * 2.5); // 2.5 is approximate char width
-        const adjustedWidths = columnWidths.map(width => Math.max(width * scaleFactor, 15));
+        // Calculate column widths evenly distributed
+        const columnWidth = usableWidth / numColumns;
+        const minColumnWidth = 15; // Minimum width per column
+        
+        // Adjust if columns are too narrow
+        const adjustedColumnWidth = Math.max(columnWidth, minColumnWidth);
         
         // Start table
         let yPosition = 50;
-        const lineHeight = 6;
+        const lineHeight = baseFontSize * 0.5 + 2; // Responsive line height
         
-        // Determine font size based on number of columns
-        const fontSize = headers.length > 10 ? 7 : headers.length > 8 ? 8 : 9;
-        pdf.setFontSize(fontSize);
+        pdf.setFontSize(baseFontSize);
         
-        // Headers
+        // Headers (center-aligned)
         pdf.setFont('times', 'bold');
         let xPosition = margin;
+        
         humanHeaders.forEach((header, index) => {
-          // Wrap text if too long
-          const wrappedHeader = pdf.splitTextToSize(header, adjustedWidths[index]);
-          pdf.text(wrappedHeader, xPosition, yPosition);
-          xPosition += adjustedWidths[index];
+          // Center text within column
+          const textWidth = pdf.getTextWidth(header);
+          const centerX = xPosition + (adjustedColumnWidth / 2) - (textWidth / 2);
+          pdf.text(header, Math.max(xPosition, centerX), yPosition);
+          xPosition += adjustedColumnWidth;
         });
         
         // Draw line under headers
-        pdf.line(margin, yPosition + 2, pageWidth - margin, yPosition + 2);
-        yPosition += lineHeight + 2;
+        pdf.setLineWidth(0.5);
+        pdf.line(margin, yPosition + 3, margin + (adjustedColumnWidth * numColumns), yPosition + 3);
+        yPosition += lineHeight + 5;
         
         // Data rows
         pdf.setFont('times', 'normal');
+        
         data.forEach((item, rowIndex) => {
           xPosition = margin;
           let maxRowHeight = lineHeight;
@@ -296,41 +291,55 @@ class ExportService {
               }
             }
             
-            // Wrap text if too long
-            const wrappedText = pdf.splitTextToSize(String(value), adjustedWidths[colIndex]);
-            pdf.text(wrappedText, xPosition, yPosition);
+            // Convert value to string and limit length if necessary
+            let cellText = String(value);
             
-            // Calculate row height based on wrapped text
-            const textHeight = wrappedText.length * (fontSize * 0.35);
-            maxRowHeight = Math.max(maxRowHeight, textHeight);
+            // Truncate text if too long for column width
+            const maxTextWidth = adjustedColumnWidth - 2; // Leave 2mm padding
+            while (pdf.getTextWidth(cellText) > maxTextWidth && cellText.length > 3) {
+              cellText = cellText.substring(0, cellText.length - 4) + '...';
+            }
             
-            xPosition += adjustedWidths[colIndex];
+            // Left-align data within column
+            pdf.text(cellText, xPosition + 1, yPosition); // 1mm left padding
+            
+            xPosition += adjustedColumnWidth;
           });
           
-          yPosition += maxRowHeight;
+          yPosition += lineHeight;
           
           // Add new page if needed
           if (yPosition > pageHeight - 30) {
             pdf.addPage();
             yPosition = 25;
             
-            // Re-print headers on new page
+            // Re-print title and headers on new page
+            pdf.setFontSize(14);
+            pdf.setFont('times', 'bold');
+            pdf.text(category.name, pageWidth / 2, yPosition, { align: 'center' });
+            yPosition += 15;
+            
+            // Re-print headers
+            pdf.setFontSize(baseFontSize);
             pdf.setFont('times', 'bold');
             xPosition = margin;
+            
             humanHeaders.forEach((header, index) => {
-              const wrappedHeader = pdf.splitTextToSize(header, adjustedWidths[index]);
-              pdf.text(wrappedHeader, xPosition, yPosition);
-              xPosition += adjustedWidths[index];
+              const textWidth = pdf.getTextWidth(header);
+              const centerX = xPosition + (adjustedColumnWidth / 2) - (textWidth / 2);
+              pdf.text(header, Math.max(xPosition, centerX), yPosition);
+              xPosition += adjustedColumnWidth;
             });
             
-            pdf.line(margin, yPosition + 2, pageWidth - margin, yPosition + 2);
-            yPosition += lineHeight + 4;
+            pdf.line(margin, yPosition + 3, margin + (adjustedColumnWidth * numColumns), yPosition + 3);
+            yPosition += lineHeight + 5;
             pdf.setFont('times', 'normal');
           }
         });
       } else {
+        // No data message (center-aligned)
         pdf.setFontSize(12);
-        pdf.setFont('times', 'normal');
+        pdf.setFont('times', 'italic');
         pdf.text('Tidak ada data tersedia', pageWidth / 2, 70, { align: 'center' });
       }
     }
