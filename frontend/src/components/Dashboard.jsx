@@ -173,6 +173,6 @@ const Dashboard = () => {
       </footer>
     </div>
   );
-export default Dashboard;
+};
 
 export default Dashboard;
