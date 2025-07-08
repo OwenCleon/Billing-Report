@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Menu, X, FileText, Download, Plus, Heart } from 'lucide-react';
+import { Menu, X, FileText, Download, Plus, Heart, FileStack } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
@@ -39,6 +39,16 @@ const Dashboard = () => {
       toast.success('PDF file exported successfully!');
     } catch (error) {
       toast.error('Failed to export PDF file');
+      console.error('Export error:', error);
+    }
+  };
+
+  const handleExportCombinedPDF = async () => {
+    try {
+      await ExportService.exportToCombinedPDF();
+      toast.success('Combined PDF exported successfully!');
+    } catch (error) {
+      toast.error('Failed to export Combined PDF');
       console.error('Export error:', error);
     }
   };
@@ -90,6 +100,14 @@ const Dashboard = () => {
         >
           <Download className="mr-2 h-4 w-4" />
           Export PDF
+        </Button>
+        <Button
+          onClick={handleExportCombinedPDF}
+          className="w-full bg-purple-600 hover:bg-purple-700 text-white transition-all duration-200 hover:shadow-lg"
+          title="Compact layout PDF with all categories merged for efficient printing"
+        >
+          <FileStack className="mr-2 h-4 w-4" />
+          Export Combined PDF
         </Button>
       </div>
     </div>
@@ -150,6 +168,15 @@ const Dashboard = () => {
                       >
                         <Download className="mr-2 h-4 w-4" />
                         PDF
+                      </Button>
+                      <Button
+                        onClick={handleExportCombinedPDF}
+                        size="sm"
+                        className="bg-purple-600 hover:bg-purple-700 text-white hidden lg:flex transition-all duration-200 hover:shadow-lg"
+                        title="Compact layout PDF with all categories merged for efficient printing"
+                      >
+                        <FileStack className="mr-2 h-4 w-4" />
+                        Combined
                       </Button>
                     </div>
                   </div>
