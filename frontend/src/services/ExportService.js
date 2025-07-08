@@ -107,10 +107,15 @@ class ExportService {
               const humanKey = headerMapping[key] || key;
               let value = item[key];
               
-              // Format currency fields
+              // Format currency fields with proper Indonesian formatting
               if (key.includes('tagihan') || key.includes('biaya') || key.includes('bayar') || key.includes('setor')) {
                 if (typeof value === 'number') {
-                  value = this.formatCurrency(value);
+                  // Format as Indonesian currency: Rp 250.000,50
+                  const formatted = new Intl.NumberFormat('id-ID', {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 2
+                  }).format(value);
+                  value = `Rp ${formatted}`;
                 }
               }
               
@@ -123,12 +128,12 @@ class ExportService {
 
         const worksheet = XLSX.utils.json_to_sheet(formattedData);
         
-        // Set column widths
+        // Set column widths and auto-fit
         const range = XLSX.utils.decode_range(worksheet['!ref']);
         const cols = [];
         
         for (let C = range.s.c; C <= range.e.c; ++C) {
-          let maxWidth = 10;
+          let maxWidth = 12; // Minimum width
           for (let R = range.s.r; R <= range.e.r; ++R) {
             const cell = worksheet[XLSX.utils.encode_cell({r: R, c: C})];
             if (cell && cell.v) {
@@ -138,27 +143,44 @@ class ExportService {
               }
             }
           }
-          cols.push({ width: Math.min(maxWidth + 3, 50) });
+          // Add padding and set max width
+          cols.push({ width: Math.min(maxWidth + 4, 60) });
         }
         
         worksheet['!cols'] = cols;
         
-        // Apply Times New Roman font to all cells
+        // Apply Times New Roman font and formatting to all cells
         for (let R = range.s.r; R <= range.e.r; ++R) {
           for (let C = range.s.c; C <= range.e.c; ++C) {
             const cell = worksheet[XLSX.utils.encode_cell({r: R, c: C})];
             if (cell) {
-              // Apply Times New Roman font explicitly
+              const header = Object.keys(formattedData[0] || {})[C];
+              const isNumericField = header && (
+                header.includes('Tagihan') || 
+                header.includes('Biaya') || 
+                header.includes('Bayar') || 
+                header.includes('Setor') ||
+                header.includes('Power') ||
+                header.includes('Pemakaian')
+              );
+              
+              // Apply Times New Roman font with proper alignment
               cell.s = {
                 font: { 
                   name: 'Times New Roman', 
-                  sz: 12,
+                  sz: 11,
                   family: 1 // Roman family
                 },
                 alignment: { 
                   vertical: 'center', 
-                  horizontal: 'left',
+                  horizontal: isNumericField && R > 0 ? 'right' : (R === 0 ? 'center' : 'left'),
                   wrapText: true
+                },
+                border: {
+                  top: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                  bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                  left: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                  right: { style: 'thin', color: { rgb: 'CCCCCC' } }
                 }
               };
               
@@ -173,16 +195,30 @@ class ExportService {
           }
         }
         
+        // Set row heights for better readability
+        const rows = [];
+        for (let R = range.s.r; R <= range.e.r; ++R) {
+          rows.push({ hpt: R === 0 ? 20 : 16 }); // Header row taller
+        }
+        worksheet['!rows'] = rows;
+        
         XLSX.utils.book_append_sheet(workbook, worksheet, category.name);
       }
     });
 
-    // Set workbook properties to enforce Times New Roman
+    // Set workbook properties with Times New Roman as default
     workbook.Props = {
       Title: 'Billing Reports',
       Subject: 'Monthly Billing Data',
       Author: 'Billing System',
       CreatedDate: new Date()
+    };
+
+    // Set workbook default font to Times New Roman
+    workbook.Workbook = {
+      Views: [{
+        RTL: false
+      }]
     };
 
     // Generate filename with current date
