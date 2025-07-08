@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Menu, X, FileText, Download, Plus } from 'lucide-react';
+import { Menu, X, FileText, Download, Plus, Heart } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
@@ -129,23 +129,29 @@ const Dashboard = () => {
                   <CardTitle className="text-2xl font-bold text-gray-800">
                     {categories.find(cat => cat.id === activeCategory)?.name}
                   </CardTitle>
-                  <div className="flex space-x-2">
-                    <Button
-                      onClick={handleExportExcel}
-                      size="sm"
-                      className="bg-green-600 hover:bg-green-700 text-white hidden lg:flex transition-all duration-200 hover:shadow-lg"
-                    >
-                      <Download className="mr-2 h-4 w-4" />
-                      Excel
-                    </Button>
-                    <Button
-                      onClick={handleExportPDF}
-                      size="sm"
-                      className="bg-red-600 hover:bg-red-700 text-white hidden lg:flex transition-all duration-200 hover:shadow-lg"
-                    >
-                      <Download className="mr-2 h-4 w-4" />
-                      PDF
-                    </Button>
+                  <div className="flex items-center space-x-4">
+                    {/* Made by Owen C credit */}
+                    <div className="hidden lg:flex items-center text-sm text-gray-500">
+                      Made by Owen C with <Heart className="h-4 w-4 text-red-500 mx-1" />
+                    </div>
+                    <div className="flex space-x-2">
+                      <Button
+                        onClick={handleExportExcel}
+                        size="sm"
+                        className="bg-green-600 hover:bg-green-700 text-white hidden lg:flex transition-all duration-200 hover:shadow-lg"
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        Excel
+                      </Button>
+                      <Button
+                        onClick={handleExportPDF}
+                        size="sm"
+                        className="bg-red-600 hover:bg-red-700 text-white hidden lg:flex transition-all duration-200 hover:shadow-lg"
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        PDF
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </CardHeader>
@@ -156,8 +162,19 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+      
+      {/* Footer */}
+      <footer className="bg-white border-t border-gray-200 py-4 mt-8">
+        <div className="max-w-7xl mx-auto px-4 text-center">
+          <p className="text-sm text-gray-500 flex items-center justify-center">
+            Made by Owen C with <Heart className="h-4 w-4 text-red-500 mx-1" />
+          </p>
+        </div>
+      </footer>
     </div>
   );
 };
+
+export default Dashboard;
 
 export default Dashboard;
