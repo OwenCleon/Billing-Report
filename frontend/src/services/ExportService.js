@@ -12,6 +12,70 @@ class ExportService {
     }).format(value).replace('IDR', 'Rp');
   }
 
+  static getHumanReadableHeaders(categoryKey) {
+    const headerMappings = {
+      'pam-jaya': {
+        'namaPAM': 'Nama PAM',
+        'noRef': 'No. Ref',
+        'noPelanggan': 'No. Pelanggan',
+        'nama': 'Nama',
+        'alamat': 'Alamat',
+        'totalTagihan': 'Total Tagihan',
+        'biayaAdmin': 'Biaya Admin',
+        'periodeTerbayar': 'Periode Terbayar',
+        'pemakaian': 'Pemakaian (m³)',
+        'tagihan': 'Tagihan'
+      },
+      'listrik-pln': {
+        'idPelanggan': 'ID Pelanggan',
+        'namaCustomer': 'Nama Customer',
+        'tarifDaya': 'Tarif / Daya',
+        'tagihanPLN': 'Tagihan PLN',
+        'noReferensi': 'No. Referensi',
+        'blTh': 'BL / TH',
+        'power': 'Power',
+        'subscriberSegmentation': 'Subscriber Segmentation',
+        'totalBayar': 'Total Bayar'
+      },
+      'pam-lainnya': {
+        'noPelanggan': 'No. Pelanggan',
+        'nama': 'Nama',
+        'totalTagihan': 'Total Tagihan',
+        'biayaAdmin': 'Biaya Admin',
+        'totalBayar': 'Total Bayar',
+        'periode': 'Periode',
+        'tagihan': 'Tagihan'
+      },
+      'transaksi-umum': {
+        'waktu': 'Waktu',
+        'nomorReferensi': 'Nomor Referensi',
+        'nomorPelanggan': 'Nomor Pelanggan',
+        'nama': 'Nama',
+        'totalTagihan': 'Total Tagihan',
+        'biayaAdmin': 'Biaya Admin',
+        'totalBayar': 'Total Bayar'
+      },
+      'penerimaan-negara': {
+        'tanggal': 'Tanggal',
+        'jam': 'Jam',
+        'noReferensi': 'No. Referensi',
+        'dariRekening': 'Dari Rekening',
+        'kodeBilling': 'Kode Billing',
+        'npwp': 'NPWP',
+        'namaWP': 'Nama WP',
+        'alamat': 'Alamat',
+        'jumlahSetor': 'Jumlah Setor',
+        'ntpn': 'NTPN',
+        'ntb': 'NTB',
+        'stan': 'STAN',
+        'tanggalBuku': 'Tanggal Buku',
+        'status': 'Status'
+      }
+    };
+    
+    return headerMappings[categoryKey] || {};
+  }
+
   static async exportToExcel() {
     const workbook = XLSX.utils.book_new();
     
@@ -27,26 +91,72 @@ class ExportService {
       const data = LocalStorageService.getData(category.key);
       
       if (data.length > 0) {
-        // Format the data for Excel
+        const headerMapping = this.getHumanReadableHeaders(category.key);
+        
+        // Format the data for Excel with human-readable headers
         const formattedData = data.map(item => {
-          const formatted = { ...item };
+          const formatted = {};
           
-          // Format currency fields
-          Object.keys(formatted).forEach(key => {
-            if (key.includes('tagihan') || key.includes('biaya') || key.includes('bayar') || key.includes('setor')) {
-              if (typeof formatted[key] === 'number') {
-                formatted[key] = this.formatCurrency(formatted[key]);
+          Object.keys(item).forEach(key => {
+            if (key !== 'id') {
+              const humanKey = headerMapping[key] || key;
+              let value = item[key];
+              
+              // Format currency fields
+              if (key.includes('tagihan') || key.includes('biaya') || key.includes('bayar') || key.includes('setor')) {
+                if (typeof value === 'number') {
+                  value = this.formatCurrency(value);
+                }
               }
+              
+              formatted[humanKey] = value;
             }
           });
-          
-          // Remove ID field
-          delete formatted.id;
           
           return formatted;
         });
 
         const worksheet = XLSX.utils.json_to_sheet(formattedData);
+        
+        // Set column widths and styling
+        const range = XLSX.utils.decode_range(worksheet['!ref']);
+        const cols = [];
+        
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          let maxWidth = 10;
+          for (let R = range.s.r; R <= range.e.r; ++R) {
+            const cell = worksheet[XLSX.utils.encode_cell({r: R, c: C})];
+            if (cell && cell.v) {
+              const cellWidth = cell.v.toString().length;
+              if (cellWidth > maxWidth) {
+                maxWidth = cellWidth;
+              }
+            }
+          }
+          cols.push({ width: Math.min(maxWidth + 2, 50) });
+        }
+        
+        worksheet['!cols'] = cols;
+        
+        // Apply Times New Roman font to all cells
+        for (let R = range.s.r; R <= range.e.r; ++R) {
+          for (let C = range.s.c; C <= range.e.c; ++C) {
+            const cell = worksheet[XLSX.utils.encode_cell({r: R, c: C})];
+            if (cell) {
+              cell.s = {
+                font: { name: 'Times New Roman', sz: 11 },
+                alignment: { vertical: 'center', horizontal: 'left' }
+              };
+              
+              // Header styling
+              if (R === 0) {
+                cell.s.font.bold = true;
+                cell.s.fill = { fgColor: { rgb: 'E6E6FA' } };
+              }
+            }
+          }
+        }
+        
         XLSX.utils.book_append_sheet(workbook, worksheet, category.name);
       }
     });
